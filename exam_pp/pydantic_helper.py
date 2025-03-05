@@ -1,5 +1,8 @@
-from pydantic.v1 import BaseModel,  __version__ as pydantic_version
+from pydantic.v1 import BaseModel  
 import json
+
+# Force to version 1
+pydantic_version = "1"
 
 # Check Pydantic version
 PYDANTIC_V2 = pydantic_version.startswith("2")
