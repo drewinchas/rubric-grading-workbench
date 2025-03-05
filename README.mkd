@@ -1,5 +1,7 @@
 # Autograder Workbench – LLM-based Evaluation for Retrieve/Generate Systems
 
+## This version of this tool has been modifed for CPSC 8470 and to run on the Palmetto 2 Cluster.
+
 *Autograder Workbench* is a toolbox for evaluating information systems that use retrieve and/or generatation approaches.
 
 The workbench builds on a code base for the Exam Answerability Metric that uses a test bank of exam questions to evaluate systems for CAR Y3. In this release, the code base is extended to generate a test bank of nuggets (aka key facts), and to provide better support for a human-in-the-loop to verify and supervise the process (without conducing any passage-level relevance judgments). The code base can evaluate systems even when no manual passage-level judgments are available.
