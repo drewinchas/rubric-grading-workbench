@@ -1,6 +1,16 @@
 # Autograder Workbench – LLM-based Evaluation for Retrieve/Generate Systems
 
 ## This version of this tool has been modifed for CPSC 8470 and to run on the Palmetto 2 Cluster.
+The intended steps to use this kit are as follows:
+1. Clone this repo to the cluster: git clone ...
+2. sh palmetto_prep.bash
+3. Get a single core allocation (minimal resources needed for salloc), then run on the compute node:
+4. export OPENAI_API_KEY=\<your API key\>
+5. sh walkthrough-dl20_phase1.sh
+6. Exit the compute node
+7. On the login node run:
+5. sbatch palmetto_batch.bash
+
 
 *Autograder Workbench* is a toolbox for evaluating information systems that use retrieve and/or generatation approaches.
 
