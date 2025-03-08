@@ -65,6 +65,6 @@ patch .venv/lib/python3.13/site-packages/nltk/corpus/reader/panlex_lite.py < pal
 # Get DL20 dataset for analysis
 #
 wget https://www.cs.unh.edu/~dietz/autograder/data-dl20.tar.xz
-tar -zxvf data-dl20.tar.xz
+tar -xvf data-dl20.tar.xz
 wget https://www.cs.unh.edu/~dietz/autograder/data-dl20-runs.tar.xz
-tar -zxvf data-dl20-runs.tar.xz
+tar -xvf data-dl20-runs.tar.xz
