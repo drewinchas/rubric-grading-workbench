@@ -195,6 +195,8 @@ def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path,
 def main(cmdargs=None):
     """Score paragraphs by number of questions that are correctly answered."""
 
+    mp.set_start_method('spawn')
+
     import argparse
 
     desc = f'''EXAM grading, verifying which paragraphs answer which questions with a Q/A system. \n
