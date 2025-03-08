@@ -10,7 +10,7 @@ from . import question_bank_loader
 from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
-from .t5_qa import *
+from .t5_qa_mp import *
 from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
 
