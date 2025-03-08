@@ -103,26 +103,19 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
 def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
+    query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
-    for para in itertools.islice(paragraphs, max_paragraphs):
-        paragraph_txt = para.text
-
-        answerTuples = qaPipeline.chunkingBatchAnswerQuestions([grading_prompt], paragraph_txt=paragraph_txt)
-        (_, answer) = answerTuples[0]
-
-        grade_obj = Grades(correctAnswered= grading_prompt.check_answer(answer)
-                           , answer=answer
-                           , self_ratings= grading_prompt.check_answer_rating(answer)
-                           , llm = qaPipeline.exp_modelName()
-                           , llm_options={}
-                           , prompt_type= grading_prompt.prompt_type()
-                           , prompt_info= grading_prompt.prompt_info()
-                        )
+    with mp.Pool(processes=num_workers) as pool:
+        args = [(para, [grading_prompt], qaPipeline, query_id) for para in itertools.islice(paragraphs, max_paragraphs)]
+        results = pool.map(process_paragraph, args)
         
-        if para.grades is None:
-            para.grades = list()
-        para.grades.append(grade_obj)
+        # Update the paragraphs in the original list
+        for para in results:
+            for i, p in enumerate(queryWithFullParagraphList.paragraphs):
+                if p.paragraph_id == para.paragraph_id:
+                    queryWithFullParagraphList.paragraphs[i] = para
+                    break
 
 
 def noodle(qaPipeline, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
