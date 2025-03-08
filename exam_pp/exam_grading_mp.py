@@ -15,7 +15,7 @@ from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQ
 from . import tqa_loader
 
 num_workers = int(os.environ.get("NUM_WORKERS", 4))
-gpu_device_counter = itertools.count(start=int(os.environ.get("GPU_DEVICE", 0)) if os.environ.get("GPU_DEVICE") is not None else 0)
+#gpu_device_counter = itertools.count(start=int(os.environ.get("GPU_DEVICE", 0)) if os.environ.get("GPU_DEVICE") is not None else 0)
 
 def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
@@ -42,12 +42,12 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
 
 
 def process_paragraph(args):
-    para, grading_prompts, qaPipeline, query_id, gpu_device_id = args
+    para, grading_prompts, qaPipeline, query_id = args
     paragraph_id = para.paragraph_id
     paragraph_txt = para.text
 
-    if gpu_device_id is not None:
-        os.environ["GPU_DEVICE"] = str(gpu_device_id)
+    #if gpu_device_id is not None:
+    #    os.environ["GPU_DEVICE"] = str(gpu_device_id)
 
     answerTuples = qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
 
@@ -89,7 +89,7 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
     paragraphs = queryWithFullParagraphList.paragraphs
 
     with mp.Pool(processes=num_workers) as pool:
-        args = [(para, grading_prompts, qaPipeline, query_id, next(gpu_device_counter) if os.environ.get("GPU_DEVICE") is not None else None) for para in itertools.islice(paragraphs, max_paragraphs)]
+        args = [(para, grading_prompts, qaPipeline, query_id) for para in itertools.islice(paragraphs, max_paragraphs)]
         results = pool.map(process_paragraph, args)
         
         # Update the paragraphs in the original list
