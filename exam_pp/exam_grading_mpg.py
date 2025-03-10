@@ -16,8 +16,6 @@ from . import tqa_loader
 
 num_workers = int(os.environ.get("NUM_WORKERS", 4))
 
-#gpu_device_counter = itertools.count(start=int(os.environ.get("GPU_DEVICE", 0)) if os.environ.get("GPU_DEVICE") is not None else 0)
-
 def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
 
@@ -43,20 +41,9 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
 
 
 def process_paragraph(args):
-    para, grading_prompts, model_pipeline, model_name, device, query_id = args
+    para, grading_prompts, query_id, qaPipeline = args
     paragraph_id = para.paragraph_id
     paragraph_txt = para.text
-
-    #if gpu_device_id is not None:
-    #    os.environ["GPU_DEVICE"] = str(gpu_device_id)
-
-    modelPipelineOpts = {'text2text': lambda model_name, device:  Text2TextPipeline(model_name, device)
-                ,'question-answering': lambda model_name, device:  QaPipeline(model_name, device)
-                ,'text-generation': lambda model_name, device:  TextGenerationPipeline(model_name, device) 
-                , 'llama': lambda model_name, device: LlamaTextGenerationPipeline(model_name, device)
-                }
-    
-    qaPipeline = modelPipelineOpts[model_pipeline](model_name, device)
 
     answerTuples = qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
 
@@ -91,14 +78,14 @@ def process_paragraph(args):
     return para
 
 
-def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], model_pipeline, model_name, max_paragraphs:Optional[int]=None)->None:
+def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipelines, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
     with mp.Pool(processes=num_workers) as pool:
-        args = [(para, grading_prompts, model_pipeline, model_name, i % num_workers, query_id) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
+        args = [(para, grading_prompts, query_id, qaPipelines[i % num_workers]) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
         results = pool.map(process_paragraph, args)
         
         # Update the paragraphs in the original list
@@ -109,14 +96,14 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
                     break
 
 
-def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipeline:Union[QaPipeline, Text2TextPipeline, TextGenerationPipeline, LlamaTextGenerationPipeline], max_paragraphs:Optional[int]=None)->None:
+def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipelines, max_paragraphs:Optional[int]=None)->None:
     '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
     with mp.Pool(processes=num_workers) as pool:
-        args = [(para, [grading_prompt], qaPipeline, query_id) for para in itertools.islice(paragraphs, max_paragraphs)]
+        args = [(para, [grading_prompt], qaPipelines[i % num_workers], query_id) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
         results = pool.map(process_paragraph, args)
         
         # Update the paragraphs in the original list
@@ -127,7 +114,7 @@ def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:P
                     break
 
 
-def noodle(qaPipeline, model_pipeline, model_name, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+def noodle(qaPipelines, model_pipeline, model_name, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -181,10 +168,10 @@ def noodle(qaPipeline, model_pipeline, model_name, question_set:Dict[str,List[Pr
                 any_prompt = grading_prompts[0]
                 if any_prompt.prompt_type() == QuestionPrompt.my_prompt_type or any_prompt.prompt_type() == NuggetPrompt.my_prompt_type:
                     # Regular path
-                    noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, model_pipeline, model_name, max_paragraphs)
+                    noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts, qaPipelines, max_paragraphs)
                 elif any_prompt.prompt_type() == DirectGradingPrompt.my_prompt_type:
                     for grading_prompt in grading_prompts: # we expect there to be only one
-                        noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipeline, max_paragraphs)
+                        noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt, qaPipelines, max_paragraphs)
                 else:
                     raise RuntimeError(f"unknown grading prompt type {any_prompt.prompt_type()}  not matching any of these: {DirectGradingPrompt.my_prompt_type}, {QuestionPrompt.my_prompt_type}, {NuggetPrompt.my_prompt_type}")
             
@@ -270,9 +257,9 @@ def main(cmdargs=None):
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
-    qaPipeline = modelPipelineOpts[args.model_pipeline](args.model_name, 0)
+    qaPipelines = [modelPipelineOpts[args.model_pipeline](args.model_name, i) for i in range(num_workers)]
 
-    noodle(qaPipeline=qaPipeline
+    noodle(qaPipelines=qaPipelines
            , model_pipeline = args.model_pipeline
            , model_name = args.model_name
            , question_set=question_set
