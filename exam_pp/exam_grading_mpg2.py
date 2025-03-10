@@ -10,12 +10,11 @@ from . import question_bank_loader
 from . import question_loader
 from .test_bank_prompts import Prompt, QuestionPrompt, NuggetPrompt, get_prompt_classes
 from .test_bank_prompts import *
-from .t5_qa_mp import *
+from .t5_qa_mpg import *
 from .data_model import ExamGrades, FullParagraphData, Grades, SelfRating, dumpQueryWithFullParagraphList, parseQueryWithFullParagraphs
 from . import tqa_loader
 
 num_workers = int(os.environ.get("NUM_WORKERS", 4))
-#gpu_device_counter = itertools.count(start=int(os.environ.get("GPU_DEVICE", 0)) if os.environ.get("GPU_DEVICE") is not None else 0)
 
 def fix_car_query_id(input:List[Tuple[str,List[Prompt]]]) -> List[Tuple[str,List[Prompt]]]:
     return [ ((f'tqa2:{tqa_query_id}'), payload) for tqa_query_id, payload in input]
@@ -42,13 +41,9 @@ def self_ratings_from_prompt(prompt:Prompt, answer)->SelfRating:
 
 
 def process_paragraph(args):
-    para, grading_prompts, qaPipelines, query_id, worker_id = args
-    qaPipeline = qaPipelines[worker_id]
+    para, grading_prompts, query_id, qaPipeline = args
     paragraph_id = para.paragraph_id
     paragraph_txt = para.text
-
-    #if gpu_device_id is not None:
-    #    os.environ["GPU_DEVICE"] = str(gpu_device_id)
 
     answerTuples = qaPipeline.chunkingBatchAnswerQuestions(grading_prompts, paragraph_txt=paragraph_txt)
 
@@ -82,14 +77,15 @@ def process_paragraph(args):
         print(f'no exam score generated for paragraph {paragraph_id} as numAll=0')
     return para
 
+
 def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prompts:List[Prompt], qaPipelines, max_paragraphs:Optional[int]=None)->None:
-    '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipelines` on the `questions` set '''
+    '''Will modify `queryWithFullParagraphList` in place with exam grade annotations from `qaPipeline` on the `questions` set '''
 
     query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
     with mp.Pool(processes=num_workers) as pool:
-        args = [(para, grading_prompts, qaPipelines, query_id, i % num_workers) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
+        args = [(para, grading_prompts, i % num_workers, query_id, qaPipelines[i % num_workers]) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
         results = pool.map(process_paragraph, args)
         
         # Update the paragraphs in the original list
@@ -98,15 +94,16 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
                 if p.paragraph_id == para.paragraph_id:
                     queryWithFullParagraphList.paragraphs[i] = para
                     break
+
 
 def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:Prompt, qaPipelines, max_paragraphs:Optional[int]=None)->None:
-    '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipelines`  '''
+    '''Will modify `queryWithFullParagraphList` in place with grade annotations from `qaPipeline`  '''
 
     query_id = queryWithFullParagraphList.queryId
     paragraphs = queryWithFullParagraphList.paragraphs
 
     with mp.Pool(processes=num_workers) as pool:
-        args = [(para, [grading_prompt], qaPipelines, query_id, i % num_workers) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
+        args = [(para, [grading_prompt], qaPipelines[i % num_workers], query_id) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
         results = pool.map(process_paragraph, args)
         
         # Update the paragraphs in the original list
@@ -116,7 +113,8 @@ def noodle_one_query_direct_grading(queryWithFullParagraphList, grading_prompt:P
                     queryWithFullParagraphList.paragraphs[i] = para
                     break
 
-def noodle(qaPipelines, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
+
+def noodle(qaPipelines, model_pipeline, model_name, question_set:Dict[str,List[Prompt]], paragraph_file:Path, out_file:Path, max_queries:Optional[int]=None, max_paragraphs:Optional[int]=None
             , restart_previous_paragraph_file:Optional[Path]=None, restart_from_query:Optional[str]=None
             ):
     with gzip.open(out_file, 'wt', encoding='utf-8') as file:
@@ -207,10 +205,10 @@ def main(cmdargs=None):
                         , help='json file with paragraph to grade with exam questions.The typical file pattern is `exam-xxx.jsonl.gz.'
                         )
 
-    modelPipelineOpts = {'text2text': lambda model_name:  Text2TextPipeline(model_name)
-                ,'question-answering': lambda model_name:  QaPipeline(model_name)
-                ,'text-generation': lambda model_name:  TextGenerationPipeline(model_name) 
-                , 'llama': lambda model_name: LlamaTextGenerationPipeline(model_name)
+    modelPipelineOpts = {'text2text': lambda model_name, device:  Text2TextPipeline(model_name, device)
+                ,'question-answering': lambda model_name, device:  QaPipeline(model_name, device)
+                ,'text-generation': lambda model_name, device:  TextGenerationPipeline(model_name, device) 
+                , 'llama': lambda model_name, device: LlamaTextGenerationPipeline(model_name, device)
                 }
 
     parser.add_argument('-o', '--out-file', type=str, metavar='exam-xxx.jsonl.gz', help='Output file name where paragraphs with exam grade annotations will be written to')
@@ -259,9 +257,11 @@ def main(cmdargs=None):
     else:
         raise f"args.question_type \'{args.question_type}\' undefined"
     
-    qaPipelines = [modelPipelineOpts[args.model_pipeline](args.model_name) for _ in range(num_workers)]
+    qaPipelines = [modelPipelineOpts[args.model_pipeline](args.model_name, i) for i in range(num_workers)]
 
     noodle(qaPipelines=qaPipelines
+           , model_pipeline = args.model_pipeline
+           , model_name = args.model_name
            , question_set=question_set
            , paragraph_file= args.paragraph_file
            , out_file = args.out_file
