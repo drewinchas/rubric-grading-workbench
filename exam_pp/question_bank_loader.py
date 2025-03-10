@@ -5,8 +5,8 @@ import hashlib
 import itertools
 import time
 import typing
-from pydantic.v1 import BaseModel
-# from pydantic.generics import GenericModel
+from pydantic import BaseModel
+from pydantic.generics import GenericModel
 import json
 from typing import List, Any, Optional, Dict, Set, TextIO, Tuple,  TypeVar, Generic, List, cast
 from dataclasses import dataclass
@@ -20,7 +20,7 @@ from .pydantic_helper import pydantic_dump
 
 
 class TestPoint(BaseModel):
-    query_id: str
+    query_id :str
     facet_id: Optional[str]
     info: Optional[Any]
 
@@ -36,68 +36,48 @@ class Nugget(TestPoint):
     nugget_id: str
     nugget_text: str
 
-class QueryTestBank(BaseModel, Generic[T]):
+class QueryTestBank(GenericModel, Generic[T]):
     query_id: str
     facet_id: Optional[str]
     facet_text: Optional[str]
     test_collection: str
     query_text: str
     info: Optional[Any]
-    # items: List[T]
+    items: List[T]
 
 
 
 class QueryQuestionBank(QueryTestBank[ExamQuestion]):
     hash:int = 1243234 # TODO random
-    items: List[ExamQuestion]
 
     def get_questions(self) -> List[ExamQuestion]:
         return self.items
 
 class QueryNuggetBank(QueryTestBank[Nugget]):
     hash:int = 1243234 # TODO random
-    items: List[Nugget]
 
     def get_nuggets(self) -> List[Nugget]:
         return self.items
 
 
-def parseNuggetBank(file_path:Path)-> typing.Sequence[QueryNuggetBank]:
-    result_n:List[QueryNuggetBank] = list()
-    with gzip.open(file_path, 'rt', encoding='utf-8') as file:
-        result_n = [QueryNuggetBank.parse_raw(line) for line in file]
-    return result_n
-
-def parseQuestionBank(file_path:Path)-> typing.Sequence[QueryQuestionBank]:
-    result_q:List[QueryQuestionBank] = list()
-    with gzip.open(file_path, 'rt', encoding='utf-8') as file:
-        result_q = [QueryQuestionBank.parse_raw(line) for line in file]
-    return result_q
 
 
-def parseTestBank(use_nuggets:bool):
+def parseTestBank(file_path:Path, use_nuggets:bool) -> typing.Sequence[QueryTestBank] :
+    '''Load QueryTestBank (exam questions or nuggets)'''
+    # Open the gzipped file
+
     if(use_nuggets):
-        return parseNuggetBank  
-    else:
-        return parseQuestionBank
+        result_n:List[QueryNuggetBank] = list()
+        with gzip.open(file_path, 'rt', encoding='utf-8') as file:
+            result_n = [QueryNuggetBank.parse_raw(line) for line in file]
+        return result_n
 
+    else: # exam questions
 
-# def parseTestBank(use_nuggets:bool)(file_path:Path)-> typing.Sequence[QueryTestBank[T]] :
-#     '''Load QueryTestBank (exam questions or nuggets)'''
-#     # Open the gzipped file
-
-#     if(use_nuggets):
-#         result_n:List[QueryNuggetBank] = list()
-#         with gzip.open(file_path, 'rt', encoding='utf-8') as file:
-#             result_n = [QueryNuggetBank.parse_raw(line) for line in file]
-#         return result_n
-
-#     else: # exam questions
-
-#         result_q:List[QueryQuestionBank] = list()
-#         with gzip.open(file_path, 'rt', encoding='utf-8') as file:
-#             result_q = [QueryQuestionBank.parse_raw(line) for line in file]
-#         return result_q
+        result_q:List[QueryQuestionBank] = list()
+        with gzip.open(file_path, 'rt', encoding='utf-8') as file:
+            result_q = [QueryQuestionBank.parse_raw(line) for line in file]
+        return result_q
 
 
 
@@ -196,7 +176,7 @@ def emit_test_bank_entry(out_file:TextIO, test_collection:str, generation_info:A
 ## -------------------------------------------
         
 
-def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater_tolerant:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
+def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, prompt_class:str="QuestionPromptWithChoices")-> List[Tuple[str, List[Prompt]]]:
     '''Iterate over all test bank entries, first try to load as direct grading prompt, if that fails check for the `use_nuggets` flag and try to load as question or nugget prompts.'''
     def generate_letter_choices() -> Set[str]:
         char_options = ['A','B','C','D', 'a', 'b', 'c', 'd', 'i', 'ii', 'iii', 'iv']
@@ -205,8 +185,8 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
         
     option_non_answers = generate_letter_choices()
     option_non_answers.add('unanswerable')
-    test_banks = parseTestBank(use_nuggets=use_nuggets)(question_file)
-    prompt_dict: Dict[str, List[Prompt]]
+    test_banks = parseTestBank(question_file, use_nuggets=use_nuggets)
+    prompt_dict : Dict[str, List[Prompt]]
     prompt_dict = defaultdict(list)
     prompt:Prompt
 
@@ -214,7 +194,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
 
         try:
             # prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=bank.facet_id, facet_text=bank.facet_text)
-            prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=None, facet_text=None, self_rater_tolerant=self_rater_tolerant)
+            prompt = direct_grading_prompt(prompt_class=prompt_class, query_id=bank.query_id, query_text=bank.query_text, facet_id=None, facet_text=None)
             # hack to only include one direct prompt for each query.
 
             if bank.query_id not in prompt_dict:  # ONLY one direct grading prompt per query!!! 
@@ -227,9 +207,8 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
             # try question and nugget prompts
 
 
-
             if not use_nuggets:
-                question_bank = bank
+                question_bank = cast(QueryQuestionBank, bank)
                 query_id = question_bank.query_id
                 for question in question_bank.get_questions():
                     if not question.query_id == query_id:
@@ -241,7 +220,6 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                                             , facet_id = question.facet_id
                                                                             , query_text = question_bank.query_text
                                                                             , unanswerable_expressions = option_non_answers
-                                                                            , self_rater_tolerant=self_rater_tolerant
                                                                             )
                     elif(prompt_class == "QuestionCompleteConciseUnanswerablePromptWithChoices"):
                         prompt = QuestionCompleteConciseUnanswerablePromptWithChoices(question_id = question.question_id
@@ -267,7 +245,7 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
 
 
             if use_nuggets:
-                nugget_bank = bank # cast(QueryNuggetBank, bank)
+                nugget_bank = cast(QueryNuggetBank, bank)
                 query_id = nugget_bank.query_id
                 for nugget in nugget_bank.get_nuggets():
                     if not nugget.query_id == query_id:
@@ -280,7 +258,6 @@ def load_prompts_from_test_bank(question_file:Path, use_nuggets:bool, self_rater
                                                     , facet_id = nugget.facet_id
                                                     , query_text = nugget_bank.query_text
                                                     , unanswerable_expressions = option_non_answers
-                                                    , self_rater_tolerant=self_rater_tolerant
                                                     )
                     elif(prompt_class =="NuggetExtractionPrompt"):
                         prompt = NuggetExtractionPrompt(nugget_id = nugget.nugget_id
