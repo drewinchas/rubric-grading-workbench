@@ -9,8 +9,8 @@ from typing import Sequence, cast, Dict, List, Tuple
 from . import tqa_loader
 from .test_bank_prompts import get_prompt_classes, get_prompt_types
 from . data_model import QueryWithFullParagraphList, GradeFilter, parseQueryWithFullParagraphs
-from . question_bank_loader import QueryQuestionBank, ExamQuestion, QueryTestBank
-from . import question_bank_loader
+from . question_bank_loader0 import QueryQuestionBank, ExamQuestion, QueryTestBank
+from . import question_bank_loader0
 
 def verify_grade_extraction(graded:List[QueryWithFullParagraphList], question_bank:Sequence[QueryTestBank], rate_grade_filter: GradeFilter, answer_grade_filter: GradeFilter):
     # graded_dict={q.queryId: q for q in graded}
@@ -295,7 +295,7 @@ def main(cmdargs=None):
 
 
     if args.question_type == 'question-bank':
-        question_set = question_bank_loader.parseTestBank(args.question_path,  use_nuggets=args.use_nuggets)
+        question_set = question_bank_loader0.parseTestBank(args.question_path,  use_nuggets=args.use_nuggets)
     #  Todo TQA!        
     elif args.question_type == "tqa":
         # question_set = fix_car_query_id(tqa_loader.parseTestBank(Path(args.question_path))
