@@ -85,7 +85,7 @@ def noodle_one_query_question_or_nugget(queryWithFullParagraphList, grading_prom
     paragraphs = queryWithFullParagraphList.paragraphs
 
     with mp.Pool(processes=num_workers) as pool:
-        args = [(para, grading_prompts, i % num_workers, query_id, qaPipelines[i % num_workers]) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
+        args = [(para, grading_prompts, query_id, qaPipelines[i % num_workers]) for i, para in enumerate(itertools.islice(paragraphs, max_paragraphs))]
         results = pool.map(process_paragraph, args)
         
         # Update the paragraphs in the original list
