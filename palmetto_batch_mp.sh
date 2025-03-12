@@ -3,11 +3,11 @@
 # Submit this script with: sbatch FILENAME
 
 #SBATCH --ntasks 1           # number of tasks
-#SBATCH --cpus-per-task 4    # number of cpu cores per task
+#SBATCH --cpus-per-task 2    # number of cpu cores per task
 #SBATCH --time 16:00:00      # walltime
-#SBATCH --mem 32gb           # amount of memory per CPU core (Memory per Task / Cores per Task)
+#SBATCH --mem 8gb           # amount of memory per CPU core (Memory per Task / Cores per Task)
 #SBATCH --nodes 1            # number of nodes
-#SBATCH --gpus-per-task a100:1 # gpu model and amount requested
+#SBATCH --gpus-per-task a40:1 # gpu model and amount requested
 #SBATCH --job-name "rubric-grading-workbench-mp" # job name
 # Created with the RCD Docs Job Builder
 #
@@ -16,7 +16,7 @@
 
 # LOAD MODULES, INSERT CODE, AND RUN YOUR PROGRAMS HERE
 source .venv/bin/activate
-export BATCH_SIZE=8
+export BATCH_SIZE=6
 export GPU_DEVICE=0
-export NUM_WORKERS=4
+export NUM_WORKERS=2
 sh walkthrough-dl20_phases2thru4_mp.sh 2>&1 |tee palmetto_batch_mp_run.log
