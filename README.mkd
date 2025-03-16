@@ -9,7 +9,7 @@ The intended steps to use this kit are as follows:
 5. sh walkthrough-dl20_phase1.sh
 6. Exit the compute node
 7. On the login node run:
-5. sbatch palmetto_batch.bash
+5. sbatch palmetto_batch.sh OR sbatch palmetto_batch_mp.sh OR sbatch palmetto_batch_mpg.sh
 
 
 *Autograder Workbench* is a toolbox for evaluating information systems that use retrieve and/or generatation approaches.
