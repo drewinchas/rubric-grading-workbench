@@ -7,7 +7,7 @@
 #SBATCH --time 16:00:00      # walltime
 #SBATCH --mem 16gb           # amount of memory per CPU core (Memory per Task / Cores per Task)
 #SBATCH --nodes 1            # number of nodes
-#SBATCH --gpus-per-task a100:2 # gpu model and amount requested
+#SBATCH --gpus-per-task a40:2 # gpu model and amount requested
 #SBATCH --job-name "rubric-grading-workbench-mpg" # job name
 # Created with the RCD Docs Job Builder
 #
